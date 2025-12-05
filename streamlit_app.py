@@ -1,6 +1,6 @@
 """
 Streamlit Multi-Page Application for Crash Reporting Analysis
-
+Used for ML coursework
 """
 
 import streamlit as st
@@ -47,7 +47,7 @@ if 'scaler' not in st.session_state:
 st.sidebar.title("🚗 Crash Analysis Dashboard")
 page = st.sidebar.radio(
     "Navigation",
-    ["🏠 Home", "📊 Data Exploration", "🔧 Preprocessing", "🤖 Model Training", "📈 Model Evaluation", "🔮 Prediction"]
+    ["🏠 Home", "📊 Data Exploration", "🔮 Prediction"]
 )
 
 # ---------------------- HOME PAGE -------------------------
@@ -63,10 +63,7 @@ if page == "🏠 Home":
     
     **How to use this app:**
     1. Go to **Data Exploration** to view the dataset  
-    2. Use **Preprocessing** to clean and prepare the data  
-    3. Train models under **Model Training**  
-    4. Compare performance in **Model Evaluation**  
-    5. Use **Prediction** to make a new prediction  
+    2. Use **Prediction** to make predictions on new crash data  
     """)
     
     # Load dataset button
@@ -135,84 +132,13 @@ elif page == "📊 Data Exploration":
             st.pyplot(fig)
             plt.close(fig)  # Close figure to prevent memory issues
 
-# ------------------ PREPROCESSING PAGE --------------------
-elif page == "🔧 Preprocessing":
-    st.title("🔧 Data Preprocessing")
-    
-    if st.session_state.data is None:
-        st.warning("⚠️ Please load the dataset from the Home page first.")
-    else:
-        df = st.session_state.data.copy()
-        
-        # This page only explains preprocessing; full pipeline is in the notebook.
-        st.info("💡 This page shows an overview of the preprocessing steps used in the notebook.")
-        
-        st.subheader("Preprocessing Steps Applied:")
-        st.markdown("""
-        1. Filled missing values  
-        2. Standardized numerical features  
-        3. Removed duplicates and invalid records  
-        4. Created engineered features (vehicle age, crash hour, etc.)  
-        5. Applied one-hot encoding  
-        6. Split data into train/validation/test  
-        """)
-
-# ------------------ MODEL TRAINING PAGE -------------------
-elif page == "🤖 Model Training":
-    st.title(" Model Training")
-    
-    # Explain training process
-    st.info(" Models were trained in the notebook using GridSearchCV.")
-    
-    st.subheader("Models Trained:")
-    st.markdown("""
-    - Random Forest  
-    - Gradient Boosting  
-    - Logistic Regression  
-    (All tuned using GridSearchCV)
-    """)
-    
-    # Try loading model (only once, not on every rerun)
-    if st.session_state.model is None:
-        try:
-            model = joblib.load('best_model.pkl')
-            st.session_state.model = model
-            st.success("✅ Best model loaded!")
-            
-            # Load scaler if exists
-            try:
-                scaler = joblib.load('scaler.pkl')
-                st.session_state.scaler = scaler
-            except:
-                pass
-        except Exception as e:
-            st.warning(f"⚠️ Model file not found: {str(e)}. Train models in the notebook first.")
-    else:
-        st.success("✅ Model already loaded!")
-
-# ------------------ MODEL EVALUATION PAGE -----------------
-elif page == "📈 Model Evaluation":
-    st.title(" Model Evaluation")
-    
-    st.subheader("Evaluation Metrics Used:")
-    st.markdown("""
-    - Accuracy  
-    - Precision  
-    - Recall  
-    - F1-Score  
-    - Confusion Matrix  
-    - Classification Report  
-    """)
-    
-    st.info("💡 Full evaluation results can be found in the Jupyter notebook.")
-
 # ---------------------- PREDICTION PAGE --------------------
 elif page == "🔮 Prediction":
     st.title("🔮 Make Predictions")
     
     # Ensure model is loaded
     if st.session_state.model is None:
-        st.warning("⚠️ Load the model from the Model Training page first.")
+        st.warning("⚠️ Model needs to be loaded. Click the button below.")
         if st.button("Load Model Now"):
             try:
                 model = joblib.load('best_model.pkl')
