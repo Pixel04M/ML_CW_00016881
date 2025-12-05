@@ -144,6 +144,18 @@ elif page == "🔮 Prediction":
                 model = joblib.load('best_model.pkl')
                 st.session_state.model = model
                 
+                # Try to get feature names from model and store them
+                if hasattr(model, 'feature_names_in_'):
+                    st.session_state.expected_features = list(model.feature_names_in_)
+                    st.info(f"✅ Model loaded with {len(st.session_state.expected_features)} feature names.")
+                else:
+                    # Try preprocessing info
+                    try:
+                        preprocessing_info = joblib.load('preprocessing_info.pkl')
+                        st.session_state.expected_features = preprocessing_info.get('feature_names', [])
+                    except:
+                        st.warning("⚠️ Could not get feature names. Prediction may have issues.")
+                
                 # Load scaler
                 try:
                     scaler = joblib.load('scaler.pkl')
@@ -161,19 +173,54 @@ elif page == "🔮 Prediction":
         # Split form inputs into two columns
         col1, col2 = st.columns(2)
         
-        # Left column inputs
+        # Load actual categorical values from dataset for accurate matching
+        @st.cache_data
+        def get_categorical_values():
+            """Load unique categorical values from dataset"""
+            try:
+                df_sample = pd.read_csv('Crash_Reporting_-_Drivers_Data.csv', nrows=50000)
+                return {
+                    'weather': sorted(df_sample['Weather'].dropna().unique().tolist()) if 'Weather' in df_sample.columns else ["Clear", "Cloudy", "Rain", "Snow"],
+                    'surface': sorted(df_sample['Surface Condition'].dropna().unique().tolist()) if 'Surface Condition' in df_sample.columns else ["Dry", "Wet", "Snow", "Ice"],
+                    'light': sorted(df_sample['Light'].dropna().unique().tolist()) if 'Light' in df_sample.columns else ["Daylight", "Dark - Lighted", "Dark - Not Lighted"],
+                    'collision': sorted(df_sample['Collision Type'].dropna().unique().tolist()) if 'Collision Type' in df_sample.columns else ["Front to Rear", "Front to Front", "Angle"],
+                    'traffic': sorted(df_sample['Traffic Control'].dropna().unique().tolist()) if 'Traffic Control' in df_sample.columns else ["No Controls", "Traffic Control Signal"],
+                    'damage': sorted(df_sample['Vehicle Damage Extent'].dropna().unique().tolist()) if 'Vehicle Damage Extent' in df_sample.columns else ["No Damage", "Superficial", "Functional"],
+                    'body': sorted(df_sample['Vehicle Body Type'].dropna().unique().tolist()) if 'Vehicle Body Type' in df_sample.columns else ["Passenger Car", "Sport Utility Vehicle"],
+                    'movement': sorted(df_sample['Vehicle Movement'].dropna().unique().tolist()) if 'Vehicle Movement' in df_sample.columns else ["Moving Constant Speed", "Slowing or Stopping"],
+                    'route': sorted(df_sample['Route Type'].dropna().unique().tolist()) if 'Route Type' in df_sample.columns else ["Interstate (State)", "US (State)"],
+                    'substance': sorted(df_sample['Driver Substance Abuse'].dropna().unique().tolist()) if 'Driver Substance Abuse' in df_sample.columns else ["Not Suspect of Alcohol Use, Not Suspect of Drug Use"]
+                }
+            except:
+                # Fallback to default values
+                return {
+                    'weather': ["Clear", "Cloudy", "Rain", "Snow"],
+                    'surface': ["Dry", "Wet", "Snow", "Ice"],
+                    'light': ["Daylight", "Dark - Lighted", "Dark - Not Lighted"],
+                    'collision': ["Front to Rear", "Front to Front", "Angle"],
+                    'traffic': ["No Controls", "Traffic Control Signal"],
+                    'damage': ["No Damage", "Superficial", "Functional"],
+                    'body': ["Passenger Car", "Sport Utility Vehicle"],
+                    'movement': ["Moving Constant Speed", "Slowing or Stopping"],
+                    'route': ["Interstate (State)", "US (State)"],
+                    'substance': ["Not Suspect of Alcohol Use, Not Suspect of Drug Use"]
+                }
+        
+        cat_values = get_categorical_values()
+        
+        # Left column inputs (using actual values from dataset)
         with col1:
-            weather = st.selectbox("Weather", ["Clear", "Cloudy", "Rain", "Snow", "Other"])
-            surface = st.selectbox("Surface Condition", ["Dry", "Wet", "Snow", "Ice", "Other"])
-            light = st.selectbox("Light", ["Daylight", "Dark - Lighted", "Dark - Not Lighted", "Dusk", "Dawn"])
-            collision_type = st.selectbox("Collision Type", ["Front to Rear", "Front to Front", "Angle", "Sideswipe, Same Direction", "Single Vehicle", "Other"])
+            weather = st.selectbox("Weather", cat_values['weather'], index=0 if len(cat_values['weather']) > 0 else 0)
+            surface = st.selectbox("Surface Condition", cat_values['surface'], index=0 if len(cat_values['surface']) > 0 else 0)
+            light = st.selectbox("Light", cat_values['light'], index=0 if len(cat_values['light']) > 0 else 0)
+            collision_type = st.selectbox("Collision Type", cat_values['collision'], index=0 if len(cat_values['collision']) > 0 else 0)
         
         # Right column inputs
         with col2:
             driver_at_fault = st.selectbox("Driver At Fault", ["Yes", "No"])
             speed_limit = st.slider("Speed Limit", 0, 100, 40)
             vehicle_year = st.number_input("Vehicle Year", min_value=1900, max_value=2025, value=2015)
-            route_type = st.selectbox("Route Type", ["Interstate (State)", "US (State)", "Maryland (State) Route", "County Route", "Other"])
+            route_type = st.selectbox("Route Type", cat_values['route'], index=0 if len(cat_values['route']) > 0 else 0)
         
         # Additional inputs needed for feature engineering
         st.subheader("Additional Information")
@@ -182,12 +229,12 @@ elif page == "🔮 Prediction":
             crash_hour = st.slider("Crash Hour (0-23)", 0, 23, 12)
             crash_day = st.selectbox("Day of Week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
         with col4:
-            traffic_control = st.selectbox("Traffic Control", ["No Controls", "Traffic Control Signal", "Stop Sign", "Yield Sign", "Other"])
-            vehicle_damage = st.selectbox("Vehicle Damage Extent", ["No Damage", "Superficial", "Functional", "Disabling", "Vehicle Not at Scene"])
-            vehicle_body = st.selectbox("Vehicle Body Type", ["Passenger Car", "Sport Utility Vehicle", "Pickup", "Van - Passenger (<9 Seats)", "Other"])
-            vehicle_movement = st.selectbox("Vehicle Movement", ["Moving Constant Speed", "Slowing or Stopping", "Stopped in Traffic", "Turning Left", "Turning Right", "Other"])
+            traffic_control = st.selectbox("Traffic Control", cat_values['traffic'], index=0 if len(cat_values['traffic']) > 0 else 0)
+            vehicle_damage = st.selectbox("Vehicle Damage Extent", cat_values['damage'], index=0 if len(cat_values['damage']) > 0 else 0)
+            vehicle_body = st.selectbox("Vehicle Body Type", cat_values['body'], index=0 if len(cat_values['body']) > 0 else 0)
+            vehicle_movement = st.selectbox("Vehicle Movement", cat_values['movement'], index=0 if len(cat_values['movement']) > 0 else 0)
         
-        driver_substance = st.selectbox("Driver Substance Abuse", ["Not Suspect of Alcohol Use, Not Suspect of Drug Use", "Suspect of Alcohol Use", "Unknown"])
+        driver_substance = st.selectbox("Driver Substance Abuse", cat_values['substance'], index=0 if len(cat_values['substance']) > 0 else 0)
         
         # Predict button
         if st.button("Predict Injury Severity", type="primary"):
@@ -288,29 +335,132 @@ elif page == "🔮 Prediction":
                 # Prepare features
                 X_input = prepare_features(user_inputs)
                 
-                # Try to align features with training set
-                # Get model's expected features from the model itself
-                try:
-                    # Try to get feature names from preprocessing info
-                    preprocessing_info = joblib.load('preprocessing_info.pkl')
-                    expected_features = preprocessing_info.get('feature_names', [])
+                # Get expected feature names from the model itself
+                expected_features = None
+                
+                # Method 1: Check if we already stored feature names in session state
+                if hasattr(st.session_state, 'expected_features') and st.session_state.expected_features:
+                    expected_features = st.session_state.expected_features
+                    st.info(f"✅ Using {len(expected_features)} feature names from session.")
+                
+                # Method 2: Try to get from model's feature_names_in_ (sklearn 1.0+)
+                if (expected_features is None or len(expected_features) == 0) and st.session_state.model is not None:
+                    if hasattr(st.session_state.model, 'feature_names_in_'):
+                        expected_features = list(st.session_state.model.feature_names_in_)
+                        st.session_state.expected_features = expected_features
+                        st.info(f"✅ Got {len(expected_features)} feature names from model.")
+                
+                # Method 3: Try preprocessing info file
+                if (expected_features is None or len(expected_features) == 0):
+                    try:
+                        preprocessing_info = joblib.load('preprocessing_info.pkl')
+                        expected_features = preprocessing_info.get('feature_names', [])
+                        if len(expected_features) > 0:
+                            st.session_state.expected_features = expected_features
+                            st.info(f"✅ Got {len(expected_features)} feature names from preprocessing info.")
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not load preprocessing info: {str(e)}")
+                
+                # Method 4: Try to infer from model's n_features_in_
+                if (expected_features is None or len(expected_features) == 0) and st.session_state.model is not None:
+                    if hasattr(st.session_state.model, 'n_features_in_'):
+                        num_features = st.session_state.model.n_features_in_
+                        st.warning(f"⚠️ Model expects {num_features} features. Attempting to match with created features ({len(X_input.columns)}).")
+                        # If number of features matches, use X_input columns
+                        if num_features == len(X_input.columns):
+                            expected_features = list(X_input.columns)
+                        else:
+                            st.error(f"❌ Feature count mismatch: Model expects {num_features}, but we created {len(X_input.columns)}. Please retrain the model.")
+                            st.stop()
+                    elif hasattr(st.session_state.model, 'feature_importances_'):
+                        num_features = len(st.session_state.model.feature_importances_)
+                        st.warning(f"⚠️ Model expects {num_features} features. Attempting to match...")
+                        if num_features == len(X_input.columns):
+                            expected_features = list(X_input.columns)
+                        else:
+                            st.error(f"❌ Feature count mismatch: Model expects {num_features}, but we created {len(X_input.columns)}.")
+                            st.stop()
+                
+                # Align features with training set - CRITICAL for one-hot encoded columns
+                if expected_features and len(expected_features) > 0:
+                    # Create a DataFrame with all expected features, initialized to 0
+                    X_aligned = pd.DataFrame(0, index=[0], columns=expected_features)
                     
-                    if len(expected_features) > 0:
-                        # Align features with training set
-                        # Add missing columns with 0 (these are one-hot encoded features not present in this input)
-                        for feat in expected_features:
-                            if feat not in X_input.columns:
-                                X_input[feat] = 0
+                    # First, copy numerical features that match exactly
+                    numerical_cols = ['Speed Limit', 'Crash Hour', 'Crash DayOfWeek', 'Vehicle Age', 'Has_Substance_Abuse']
+                    for col in numerical_cols:
+                        if col in X_input.columns and col in X_aligned.columns:
+                            X_aligned[col] = X_input[col].values
+                    
+                    # Map categorical inputs to one-hot encoded column names
+                    # This handles the exact matching needed for one-hot encoded features
+                    categorical_inputs = {
+                        'Weather': weather,
+                        'Surface Condition': surface,
+                        'Light': light,
+                        'Traffic Control': traffic_control,
+                        'Collision Type': collision_type,
+                        'Driver At Fault': driver_at_fault,
+                        'Driver Substance Abuse': driver_substance,
+                        'Vehicle Damage Extent': vehicle_damage,
+                        'Vehicle Body Type': vehicle_body,
+                        'Vehicle Movement': vehicle_movement,
+                        'Route Type': route_type
+                    }
+                    
+                    # Find and set the correct one-hot encoded columns
+                    for cat_feature, user_value in categorical_inputs.items():
+                        # Strategy 1: Try exact match: "FeatureName_Value"
+                        exact_col = f"{cat_feature}_{user_value}"
+                        if exact_col in X_aligned.columns:
+                            X_aligned[exact_col] = 1
+                            continue
+                         
+                        # Strategy 2: Try with normalized value (remove extra spaces, handle special chars)
+                        normalized_value = user_value.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
+                        normalized_col = f"{cat_feature}_{normalized_value}"
+                        if normalized_col in X_aligned.columns:
+                            X_aligned[normalized_col] = 1
+                            continue
                         
-                        # Keep only expected features and reorder
-                        X_input = X_input.reindex(columns=expected_features, fill_value=0)
-                    else:
-                        st.warning("⚠️ Feature names not found in preprocessing info.")
+                        # Strategy 3: Case-insensitive partial matching
+                        user_value_lower = user_value.lower()
+                        matching_cols = [col for col in expected_features 
+                                       if col.startswith(f"{cat_feature}_") and 
+                                       user_value_lower in col.lower()]
+                        if len(matching_cols) > 0:
+                            X_aligned[matching_cols[0]] = 1
+                            continue
                         
-                except Exception as e:
-                    # If preprocessing info not available, try to infer from model
-                    st.warning(f"⚠️ Could not load preprocessing info: {str(e)}. Using current features.")
-                    # The model will handle feature mismatch if it's tree-based (RF, GB)
+                        # Strategy 4: Find columns starting with feature name and show options
+                        feature_cols = [col for col in expected_features if col.startswith(f"{cat_feature}_")]
+                        if len(feature_cols) > 0:
+                            # Try to find the best match by checking if any part of user_value matches
+                            best_match = None
+                            for col in feature_cols:
+                                col_value = col.replace(f"{cat_feature}_", "").lower()
+                                # Check if key words match
+                                user_words = set(user_value_lower.split())
+                                col_words = set(col_value.replace("_", " ").split())
+                                if user_words.intersection(col_words):
+                                    best_match = col
+                                    break
+                            
+                            if best_match:
+                                X_aligned[best_match] = 1
+                            else:
+                                # If no match found, show warning with available options
+                                st.warning(f"⚠️ Could not match '{cat_feature}' = '{user_value}'. Using first available: {feature_cols[0] if feature_cols else 'None'}")
+                                if feature_cols:
+                                    X_aligned[feature_cols[0]] = 1
+                        else:
+                            st.warning(f"⚠️ No columns found for feature '{cat_feature}'")
+                    
+                    X_input = X_aligned
+                    st.info(f"✅ Aligned {len(X_input.columns)} features with training set.")
+                else:
+                    st.error("❌ Could not determine expected features. Please ensure model is trained.")
+                    st.stop()
                 
                 # Make prediction
                 if st.session_state.model is not None:
